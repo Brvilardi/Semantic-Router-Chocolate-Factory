@@ -1,0 +1,115 @@
+Comment: A description of my state machine
+StartAt: Query
+States:
+  Query:
+    Type: Task
+    Parameters:
+      TableName.$: $.table_name
+      KeyConditionExpression: pk = :session_id and begins_with(sk, :st)
+      ExpressionAttributeValues:
+        ':session_id':
+          S.$: $.session_id
+        ':st':
+          S: message#
+    Resource: arn:aws:states:::aws-sdk:dynamodb:query
+    Next: Verifica se teve retorno
+    ResultPath: $.query_result
+  Verifica se teve retorno:
+    Type: Choice
+    Choices:
+      - Variable: $.query_result.Count
+        NumericGreaterThanEquals: 1
+        Next: Gerar resumo
+        Comment: Existem itens
+    Default: Gerar resumo de mensagem única
+  Gerar resumo de mensagem única:
+    Type: Task
+    Resource: arn:aws:states:::bedrock:invokeModel
+    Parameters:
+      ModelId: >-
+        arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0
+      Body:
+        anthropic_version: bedrock-2023-05-31
+        max_tokens: 800
+        system: >-
+          Você é responsavel por resumir conversas feitas em um chat de
+          atendimento ao cliente da fantástica fabrica de chocolate do Willy
+          Wonka. Você receberá histórico de mensagens que estao armazenados no
+          DynamoDB e deverá criar um resumo do que o usuário disse, captando a
+          intenção dele e as informações relevantes, de forma estruturada.
+
+          Construa esse resuma da forma mais enxuta possivel, descartando
+          informações não relevantes
+        messages:
+          - role: user
+            content:
+              - type: text
+                text.$: |-
+                  States.Format('Mensagem do usuario: {}
+                   Resposta do modelo IA: {}', $.message, $.model_response)
+    Next: Adicionar Resumo
+    ResultPath: $.summary
+    ResultSelector:
+      text.$: $.Body.content[0].text
+  Gerar resumo:
+    Type: Task
+    Resource: arn:aws:states:::bedrock:invokeModel
+    Parameters:
+      ModelId: >-
+        arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0
+      Body:
+        anthropic_version: bedrock-2023-05-31
+        max_tokens: 800
+        system: >-
+          Você é responsavel por resumir conversas feitas em um chat de
+          atendimento ao cliente da fantástica fabrica de chocolate do Willy
+          Wonka. Você receberá histórico de mensagens que estao armazenados no
+          DynamoDB e deverá criar um resumo do que o usuário disse, captando a
+          intenção dele e as informações relevantes, de forma estruturada.
+
+          Construa esse resuma da forma mais enxuta possivel, descartando
+          informações não relevantes
+        messages:
+          - role: user
+            content:
+              - type: text
+                text.$: |-
+                  States.Format('histórico: 
+                  {}
+
+                   messagem atual: {}
+
+                   resposta do modelo de IA: {}', States.JsonToString($.query_result.Items), $.message, $.model_response)
+    Next: Adicionar Resumo
+    ResultPath: $.summary
+    ResultSelector:
+      text.$: $.Body.content[0].text
+  Adicionar Resumo:
+    Type: Task
+    Resource: arn:aws:states:::dynamodb:putItem
+    Parameters:
+      TableName.$: $.table_name
+      Item:
+        pk:
+          S.$: $.session_id
+        sk:
+          S: summary
+        message:
+          S.$: $.summary.text
+    Next: Adicionar mensagem no histórico
+    ResultPath: null
+  Adicionar mensagem no histórico:
+    Type: Task
+    Resource: arn:aws:states:::dynamodb:putItem
+    Parameters:
+      TableName.$: $.table_name
+      Item:
+        pk:
+          S.$: $.session_id
+        sk:
+          S.$: States.Format('message#{}',$$.Execution.StartTime)
+        message:
+          S.$: $.message
+        ai_response:
+          S.$: $.model_response
+    End: true
