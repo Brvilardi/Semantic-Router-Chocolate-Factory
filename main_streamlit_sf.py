@@ -55,7 +55,7 @@ def get_chat_session():
 
 st.title(f"GeniusAI - Willy Wonka 🏭🍫")
 
-st.logo("genius_ai.png", size="large")
+st.logo("genius_ai.png")
 
 st.markdown(
         "<div style='background-color: #8EB69B; padding: 10px; border-radius: 10px; text-align: center;'>"
@@ -107,8 +107,8 @@ if question := st.chat_input("Faça sua pergunta"):
 
             # status.write(f"Custo: US${answer['response_pricing']['price']}")
             status.write(f"Duração: {answer_time}")
-            status.write(f"Rota: {response["route"]}")
-            status.write(f"Resumo: {response["summary"]}")
+            status.write(f"Rota: {response['route']}")
+            status.write(f"Resumo: {response['summary']}")
             status.write(f"Session ID: {session_id}")
 
     st.session_state.messages.append({"role": "assistant", "content": response["model_response"]})
