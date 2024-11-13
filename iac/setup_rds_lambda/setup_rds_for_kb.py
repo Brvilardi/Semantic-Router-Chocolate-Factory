@@ -62,7 +62,7 @@ def lambda_handler(event, context):
 
     return {
         'statusCode': 200,
-        'body': "Connected to the database"
+        'body': "Aurora postgres ready to use for bedrock kb"
     }
 
 
