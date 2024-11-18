@@ -33,7 +33,8 @@ class ChocolateFactoryChatbot(Stack):
                 name="sk",
                 type=aws_dynamodb.AttributeType.STRING
             ),
-            billing_mode=aws_dynamodb.BillingMode.PAY_PER_REQUEST
+            billing_mode=aws_dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=aws_cdk.RemovalPolicy.DESTROY
         )
 
         self.data_source_bucket = aws_s3.Bucket(
@@ -124,12 +125,12 @@ class ChocolateFactoryChatbot(Stack):
             runtime=aws_lambda.Runtime.PYTHON_3_9,
             handler="setup_kb.lambda_handler",
             code=aws_lambda.Code.from_asset("./setup_kb_lambda",
-                                            # bundling={
-                                            #     "image": aws_lambda.Runtime.PYTHON_3_9.bundling_image,
-                                            #     "command": [
-                                            #         'bash', '-c',
-                                            #         'pip install -r requirements.txt -t /asset-output && cp -au . /asset-output'
-                                            #     ]},
+                                            bundling={
+                                                "image": aws_lambda.Runtime.PYTHON_3_9.bundling_image,
+                                                "command": [
+                                                    'bash', '-c',
+                                                    'pip install -r requirements.txt -t /asset-output && cp -au . /asset-output'
+                                                ]},
                                             ),
             memory_size=1024,
             timeout=Duration.seconds(30),
@@ -143,7 +144,7 @@ class ChocolateFactoryChatbot(Stack):
         #     execute_after=[self.setup_rds_lambda, self.aurora_serverless_v2, self.post_deploy_function]
         # )
 
-        aws_cdk.CustomResource(
+        self.post_deploy_resource = aws_cdk.CustomResource(
             self,
             "PostDeployResource",
             service_token=self.post_deploy_function.function_arn,
@@ -155,6 +156,8 @@ class ChocolateFactoryChatbot(Stack):
                 "PORT": "5432"
             }
         )
+
+        self.post_deploy_resource.node.add_dependency(self.aurora_serverless_v2)
 
         aws_cdk.CfnOutput(self, "AuroraClusterArn",
                           export_name="AuroraClusterArn",
