@@ -6,6 +6,7 @@ import os
 import boto3
 from botocore.exceptions import ClientError
 import json
+from psycopg2.errors import DuplicateSchema
 
 def id_generator(size, chars=string.ascii_lowercase + string.digits):
   return ''.join(random.choice(chars) for _ in range(size))
@@ -94,33 +95,45 @@ def lambda_handler(event, context):
     print(f"event: {event}")
     print(f"context: {context}")
 
-    if event['RequestType'] == 'Delete':
+    try:
+
+        if event['RequestType'] == 'Delete':
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+        elif event['RequestType'] == 'Create':
+
+            resource_properties = event['ResourceProperties']
+            setup_rds(
+                database_name=resource_properties["DATABASE_NAME"],
+                host=resource_properties["HOST"],
+                user=resource_properties["USER"],
+                password=json.loads(get_secret(resource_properties.get('SECRET_NAME')))['password'],
+                port=resource_properties["PORT"]
+            )
+
+            setup_bedrock_kb(
+                credentials_secret_arn=resource_properties["SECRET_NAME"],
+                database_name=resource_properties["DATABASE_NAME"],
+                aurora_cluster_arn=resource_properties["HOST"],
+                table_name="bedrock_integration.bedrock_kb"
+            )
+
+            token = ("%s.%s" % (id_generator(6), id_generator(16)))
+            responseData = {}
+            responseData['Token'] = token
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+            return token
+        elif event['RequestType'] == 'Update':
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+        else:
+            cfnresponse.send(event, context, cfnresponse.FAILED, {})
+
+    except DuplicateSchema as e:
+        print(f"Exception: {e}")
         cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-    elif event['RequestType'] == 'Create':
 
-        resource_properties = event['ResourceProperties']
-        setup_rds(
-            database_name=resource_properties["DATABASE_NAME"],
-            host=resource_properties["HOST"],
-            user=resource_properties["USER"],
-            password=json.loads(get_secret(resource_properties.get('SECRET_NAME')))['password'],
-            port=resource_properties["PORT"]
-        )
-
-        setup_bedrock_kb(
-            credentials_secret_arn=resource_properties["SECRET_NAME"],
-            database_name=resource_properties["DATABASE_NAME"],
-            aurora_cluster_arn=resource_properties["HOST"],
-            table_name="bedrock_integration.bedrock_kb"
-        )
-
-        token = ("%s.%s" % (id_generator(6), id_generator(16)))
-        responseData = {}
-        responseData['Token'] = token
-        cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
-        return token
-    elif event['RequestType'] == 'Update':
-        cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-    else:
-        cfnresponse.send(event, context, cfnresponse.FAILED, {})
+    except Exception as e:
+        print(f"Exception: {e}")
+        print(f"Exception Type: {type(e)}")
+        print(f"Exception to string: {e.__str__()}")
+        cfnresponse.send(event, context, cfnresponse.FAILED, e.__str__())
 

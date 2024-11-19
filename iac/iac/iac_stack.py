@@ -19,23 +19,23 @@ class ChocolateFactoryChatbot(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        self.random_value = "12345n"
+        self.random_value = "12345n" #todo melhorar essa logica
 
-        self.dynamodb_table = aws_dynamodb.Table(
-            self,
-            "DynamoTable",
-            table_name=f"GenAIChatTable-{self.random_value}",
-            partition_key=aws_dynamodb.Attribute(
-                name="pk",
-                type=aws_dynamodb.AttributeType.STRING
-            ),
-            sort_key=aws_dynamodb.Attribute(
-                name="sk",
-                type=aws_dynamodb.AttributeType.STRING
-            ),
-            billing_mode=aws_dynamodb.BillingMode.PAY_PER_REQUEST,
-            removal_policy=aws_cdk.RemovalPolicy.DESTROY
-        )
+        # self.dynamodb_table = aws_dynamodb.Table(
+        #     self,
+        #     "DynamoTable",
+        #     table_name=f"GenAIChatTable-{self.random_value}",
+        #     partition_key=aws_dynamodb.Attribute(
+        #         name="pk",
+        #         type=aws_dynamodb.AttributeType.STRING
+        #     ),
+        #     sort_key=aws_dynamodb.Attribute(
+        #         name="sk",
+        #         type=aws_dynamodb.AttributeType.STRING
+        #     ),
+        #     billing_mode=aws_dynamodb.BillingMode.PAY_PER_REQUEST,
+        #     removal_policy=aws_cdk.RemovalPolicy.DESTROY
+        # )
 
         self.data_source_bucket = aws_s3.Bucket(
             self,
@@ -59,19 +59,61 @@ class ChocolateFactoryChatbot(Stack):
 
         self.vpc = aws_ec2.Vpc(
             self, "GenAIChatVPC",
+            max_azs = 2,
+            nat_gateways = 0,
             # nat_gateways=0,
-            # subnet_configuration=[
-            #     aws_cdk.aws_ec2.SubnetConfiguration(
-            #         subnet_type=aws_cdk.aws_ec2.SubnetType.PRIVATE_ISOLATED,
-            #         name="DatabaseSubnet",
-            #         cidr_mask=28
-            #     )
-            # ]
+            subnet_configuration=[
+                aws_cdk.aws_ec2.SubnetConfiguration(
+                    subnet_type=aws_cdk.aws_ec2.SubnetType.PRIVATE_ISOLATED,
+                    name="DatabaseSubnet",
+                    cidr_mask=22
+                )
+            ]
 
+        )
+
+        self.vpc.add_gateway_endpoint(
+            "S3Endpoint",
+            service=aws_ec2.GatewayVpcEndpointAwsService.S3
+        )
+
+        self.vpc.add_interface_endpoint(
+            "SecretsManagerEndpoint",
+            service=aws_ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER
+        )
+
+        self.vpc.add_gateway_endpoint(
+            "DynamoDBEndpoint",
+            service=aws_ec2.GatewayVpcEndpointAwsService.DYNAMODB
         )
 
         self.vpc.apply_removal_policy(aws_cdk.RemovalPolicy.DESTROY)
 
+
+        # self.setup_rds_lambda = aws_lambda.Function(
+        #     self,
+        #     "SetupRDSLambda",
+        #     runtime=aws_lambda.Runtime.PYTHON_3_9,
+        #     handler="setup_rds_for_kb.lambda_handler",
+        #     code=aws_lambda.Code.from_asset("./setup_rds_lambda",
+        #                                     bundling={
+        #                                         "image":aws_lambda.Runtime.PYTHON_3_9.bundling_image,
+        #                                         "command":[
+        #                                             'bash', '-c',
+        #                                             'pip install -r requirements.txt -t /asset-output && cp -au . /asset-output'
+        #                                         ]},
+        #                                     ),
+        #     memory_size=1024,
+        #     vpc=self.vpc,
+        #     timeout=Duration.seconds(30),
+        #     environment={
+        #         "DATABASE_NAME": "postgres",
+        #         "HOST": self.aurora_serverless_v2.cluster_endpoint.hostname,
+        #         "USER": "postgres",
+        #         "SECRET_NAME": self.aurora_serverless_v2.secret.secret_name,
+        #         "PORT": "5432"
+        #     }
+        # )
         self.aurora_serverless_v2 = aws_rds.DatabaseCluster(self, "Database",
                                                             engine=aws_rds.DatabaseClusterEngine.aurora_postgres(
                                                                 version=aws_rds.AuroraPostgresEngineVersion.VER_15_5),
@@ -79,45 +121,21 @@ class ChocolateFactoryChatbot(Stack):
                                                             serverless_v2_max_capacity=2,
                                                             writer=aws_rds.ClusterInstance.serverless_v2("writer"),
                                                             vpc=self.vpc,
+                                                            vpc_subnets=aws_ec2.SubnetSelection(subnet_type=aws_ec2.SubnetType.PRIVATE_ISOLATED),
                                                             enable_data_api=True,
                                                             credentials=aws_rds.Credentials.from_generated_secret('postgres')
                                                             )
 
-        self.setup_rds_lambda = aws_lambda.Function(
-            self,
-            "SetupRDSLambda",
-            runtime=aws_lambda.Runtime.PYTHON_3_9,
-            handler="setup_rds_for_kb.lambda_handler",
-            code=aws_lambda.Code.from_asset("./setup_rds_lambda",
-                                            bundling={
-                                                "image":aws_lambda.Runtime.PYTHON_3_9.bundling_image,
-                                                "command":[
-                                                    'bash', '-c',
-                                                    'pip install -r requirements.txt -t /asset-output && cp -au . /asset-output'
-                                                ]},
-                                            ),
-            memory_size=1024,
-            vpc=self.vpc,
-            timeout=Duration.seconds(30),
-            environment={
-                "DATABASE_NAME": "postgres",
-                "HOST": self.aurora_serverless_v2.cluster_endpoint.hostname,
-                "USER": "postgres",
-                "SECRET_NAME": self.aurora_serverless_v2.secret.secret_name,
-                "PORT": "5432"
-            }
-        )
-
-        self.setup_rds_lambda.add_to_role_policy(
-            aws_iam.PolicyStatement(
-                effect=aws_iam.Effect.ALLOW,
-                actions=["secretsmanager:GetSecretValue"],
-                resources=[self.aurora_serverless_v2.secret.secret_arn]
-            )
-        )
-
-        #create a connection between aurora and lambda
-        self.aurora_serverless_v2.connections.allow_from(self.setup_rds_lambda, aws_ec2.Port.tcp(5432))
+        # self.setup_rds_lambda.add_to_role_policy(
+        #     aws_iam.PolicyStatement(
+        #         effect=aws_iam.Effect.ALLOW,
+        #         actions=["secretsmanager:GetSecretValue"],
+        #         resources=[self.aurora_serverless_v2.secret.secret_arn]
+        #     )
+        # )
+        #
+        # #create a connection between aurora and lambda
+        # self.aurora_serverless_v2.connections.allow_from(self.setup_rds_lambda, aws_ec2.Port.tcp(5432))
 
         self.post_deploy_function = aws_lambda.Function(
             self,
@@ -287,10 +305,6 @@ class ChocolateFactoryChatbot(Stack):
         aws_cdk.CfnOutput(self, "AuroraClusterArn",
                           export_name="AuroraClusterArn",
                           value=self.aurora_serverless_v2.cluster_arn)
-
-        aws_cdk.CfnOutput(self, "LambdaSetupRdsArn",
-                            export_name="LambdaSetupRdsArn",
-                            value=self.setup_rds_lambda.function_arn)
 
         aws_cdk.CfnOutput(self, "SecretArn",
                             export_name="SecretArn",
