@@ -1,15 +1,8 @@
 import boto3
 
 
-def setup_bedrock_kb(setup_rds_lambda_arn: str, credentials_secret_arn: str,
+def setup_bedrock_kb(credentials_secret_arn: str,
                      database_name: str, aurora_cluster_arn: str, table_name: str):
-    # invoke lambda to setup the Aurora DB for KB
-    lambda_client = boto3.client("lambda")
-    lambda_client.invoke(
-        FunctionName=setup_rds_lambda_arn,
-        InvocationType="RequestResponse"
-    )
-
     # Create Bedrock Knowledgebase
     bedrock_client = boto3.client("bedrock-agent")
     bedrock_client.create_knowledge_base(

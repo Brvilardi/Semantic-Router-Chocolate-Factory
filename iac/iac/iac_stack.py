@@ -4,7 +4,7 @@ from uuid import uuid4
 import aws_cdk
 from aws_cdk import (
     # Duration,
-    Stack, aws_dynamodb, aws_s3, aws_rds, Duration, aws_lambda, aws_iam, aws_ec2
+    Stack, aws_dynamodb, aws_s3, aws_rds, Duration, aws_lambda, aws_iam, aws_ec2, aws_bedrock
     # aws_sqs as sqs,
 )
 
@@ -122,6 +122,7 @@ class ChocolateFactoryChatbot(Stack):
         self.post_deploy_function = aws_lambda.Function(
             self,
             "PostDeployFunction",
+            vpc=self.vpc,
             runtime=aws_lambda.Runtime.PYTHON_3_9,
             handler="setup_kb.lambda_handler",
             code=aws_lambda.Code.from_asset("./setup_kb_lambda",
@@ -136,13 +137,16 @@ class ChocolateFactoryChatbot(Stack):
             timeout=Duration.seconds(30),
         )
 
+        self.post_deploy_function.add_to_role_policy(
+            aws_iam.PolicyStatement(
+                effect=aws_iam.Effect.ALLOW,
+                actions=["secretsmanager:GetSecretValue"],
+                resources=[self.aurora_serverless_v2.secret.secret_arn]
+            )
+        )
 
-        # self.post_deploy_trigger = triggers.Trigger(
-        #     self,
-        #     "PostDeployTrigger",
-        #     handler=self.post_deploy_function,
-        #     execute_after=[self.setup_rds_lambda, self.aurora_serverless_v2, self.post_deploy_function]
-        # )
+        self.aurora_serverless_v2.connections.allow_from(self.post_deploy_function, aws_ec2.Port.tcp(5432))
+
 
         self.post_deploy_resource = aws_cdk.CustomResource(
             self,
@@ -158,6 +162,127 @@ class ChocolateFactoryChatbot(Stack):
         )
 
         self.post_deploy_resource.node.add_dependency(self.aurora_serverless_v2)
+
+
+        self.kb_iam_role = aws_iam.Role(
+            self,
+            "KBRole",
+            assumed_by=aws_iam.ServicePrincipal("bedrock.amazonaws.com"),
+        )
+
+        self.kb_iam_policy = aws_iam.Policy(
+            self,
+            "KBPolicy",
+            policy_name="KBPolicy",
+            statements=[
+                aws_iam.PolicyStatement(
+                    effect=aws_iam.Effect.ALLOW,
+                    actions=["rds-data:BatchExecuteStatement",
+                             "rds-data:ExecuteStatement",
+                             "rds:DescribeDBClusters"
+                             ],
+                    resources=[self.aurora_serverless_v2.cluster_arn]
+                ),
+                aws_iam.PolicyStatement(
+                    effect=aws_iam.Effect.ALLOW,
+                    actions=["secretsmanager:GetSecretValue",
+                             "kms:GenerateDataKey",
+                             "kms:Decrypt"
+                             ],
+                    resources=[self.aurora_serverless_v2.secret.secret_arn]
+                ),
+                aws_iam.PolicyStatement(
+                    effect=aws_iam.Effect.ALLOW,
+                    actions=["s3:GetObject", "s3:ListBucket"],
+                    resources=[self.data_source_bucket.bucket_arn, f"{self.data_source_bucket.bucket_arn}/*"]
+                ),
+                aws_iam.PolicyStatement(
+                    effect=aws_iam.Effect.ALLOW,
+                    actions=["bedrock:ListFoundationModels", "bedrock:ListCustomModels"],
+                    resources=["*"]
+                ),
+                aws_iam.PolicyStatement(
+                    effect=aws_iam.Effect.ALLOW,
+                    actions=["bedrock:InvokeModel"],
+                    resources=[f"arn:aws:bedrock:*"]
+                )
+            ]
+        )
+
+        self.kb_iam_policy.attach_to_role(self.kb_iam_role)
+
+        self.knowledge_base = aws_bedrock.CfnKnowledgeBase(
+            self,
+            "KnowledgeBase",
+            name="ChocolateFactoryKB",
+            description="Knowledge base for Chocolate Factory",
+            role_arn=self.kb_iam_role.role_arn,
+            knowledge_base_configuration=aws_bedrock.CfnKnowledgeBase.KnowledgeBaseConfigurationProperty(
+                type="VECTOR",
+                vector_knowledge_base_configuration=aws_bedrock.CfnKnowledgeBase.VectorKnowledgeBaseConfigurationProperty(
+                    embedding_model_arn="arn:aws:bedrock:us-east-1::foundation-model/amazon.titan-embed-text-v2:0",
+                    )
+            ),
+            storage_configuration=aws_bedrock.CfnKnowledgeBase.StorageConfigurationProperty(
+                type="RDS",
+                rds_configuration=aws_bedrock.CfnKnowledgeBase.RdsConfigurationProperty(
+                    credentials_secret_arn=self.aurora_serverless_v2.secret.secret_arn,
+                    database_name="postgres", #TODO use global variable
+                    field_mapping=aws_bedrock.CfnKnowledgeBase.RdsFieldMappingProperty(
+                        metadata_field="metadata",
+                        primary_key_field="id",
+                        text_field="chunks",
+                        vector_field="embedding"
+                    ),
+                    resource_arn=self.aurora_serverless_v2.cluster_arn,
+                    table_name="bedrock_integration.bedrock_kb" #TODO use global variable
+                )
+            )
+        )
+
+        self.knowledge_base.node.add_dependency(self.kb_iam_policy)
+        self.knowledge_base.node.add_dependency(self.post_deploy_resource)
+
+
+        self.knowledge_base_data_source = aws_bedrock.CfnDataSource(
+            self,
+            "KnowledgeBaseDataSource",
+            name="ChocolateFactoryDataSource",
+            description="Data source for Chocolate Factory",
+            data_source_configuration=aws_bedrock.CfnDataSource.DataSourceConfigurationProperty(
+                s3_configuration=aws_bedrock.CfnDataSource.S3DataSourceConfigurationProperty(
+                    bucket_arn=self.data_source_bucket.bucket_arn
+                ),
+                type="S3"
+            ),
+            knowledge_base_id=self.knowledge_base.get_att("KnowledgeBaseId").to_string()
+        )
+
+
+        self.start_kb_sync = aws_cdk.custom_resources.AwsCustomResource(
+            self,
+            "StartKBSync",
+            on_create=aws_cdk.custom_resources.AwsSdkCall(
+                service="bedrock-agent",
+                action="StartIngestionJob",
+                parameters={
+                    "knowledgeBaseId": self.knowledge_base.get_att("KnowledgeBaseId").to_string(),
+                    "dataSourceId": self.knowledge_base_data_source.get_att("DataSourceId").to_string()
+
+                },
+               physical_resource_id=aws_cdk.custom_resources.PhysicalResourceId.of("StartKBSync")
+            ),
+            policy=aws_cdk.custom_resources.AwsCustomResourcePolicy.from_sdk_calls(
+                resources=aws_cdk.custom_resources.AwsCustomResourcePolicy.ANY_RESOURCE
+            )
+        )
+
+
+
+        self.start_kb_sync.node.add_dependency(self.knowledge_base_data_source)
+
+
+
 
         aws_cdk.CfnOutput(self, "AuroraClusterArn",
                           export_name="AuroraClusterArn",

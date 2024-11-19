@@ -57,6 +57,7 @@ def lambda_handler(event, context):
         with conn.cursor() as cur:
             cur.execute(statement)
             conn.commit()
+    print("Setup rds for bedrock kb completed")
     conn.close()
 
 
