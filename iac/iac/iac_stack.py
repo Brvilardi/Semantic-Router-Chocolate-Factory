@@ -75,25 +75,10 @@ class ChocolateFactoryChatbot(Stack):
             properties={}
         )
 
-
-
-        # self.database_password = Secret(
-        #     self,
-        #     "DatabaseSecret",
-        #     secret_name=f"gen-ai-database-secret-{self.random_value}",
-        #     generate_secret_string=SecretStringGenerator(
-        #         secret_string_template='{"username": "postgres"}',
-        #         generate_string_key="password"
-        #     )
-        # )
-
-        # self.database_secret = aws_rds.Credentials.from_secret(self.database_password)
-
         self.vpc = aws_ec2.Vpc(
             self, "GenAIChatVPC",
             max_azs = 2,
             nat_gateways = 0,
-            # nat_gateways=0,
             subnet_configuration=[
                 aws_cdk.aws_ec2.SubnetConfiguration(
                     subnet_type=aws_cdk.aws_ec2.SubnetType.PRIVATE_ISOLATED,
@@ -122,30 +107,7 @@ class ChocolateFactoryChatbot(Stack):
         self.vpc.apply_removal_policy(aws_cdk.RemovalPolicy.DESTROY)
 
 
-        # self.setup_rds_lambda = aws_lambda.Function(
-        #     self,
-        #     "SetupRDSLambda",
-        #     runtime=aws_lambda.Runtime.PYTHON_3_9,
-        #     handler="setup_rds_for_kb.lambda_handler",
-        #     code=aws_lambda.Code.from_asset("./setup_rds_lambda",
-        #                                     bundling={
-        #                                         "image":aws_lambda.Runtime.PYTHON_3_9.bundling_image,
-        #                                         "command":[
-        #                                             'bash', '-c',
-        #                                             'pip install -r requirements.txt -t /asset-output && cp -au . /asset-output'
-        #                                         ]},
-        #                                     ),
-        #     memory_size=1024,
-        #     vpc=self.vpc,
-        #     timeout=Duration.seconds(30),
-        #     environment={
-        #         "DATABASE_NAME": "postgres",
-        #         "HOST": self.aurora_serverless_v2.cluster_endpoint.hostname,
-        #         "USER": "postgres",
-        #         "SECRET_NAME": self.aurora_serverless_v2.secret.secret_name,
-        #         "PORT": "5432"
-        #     }
-        # )
+
         self.aurora_serverless_v2 = aws_rds.DatabaseCluster(self, "Database",
                                                             engine=aws_rds.DatabaseClusterEngine.aurora_postgres(
                                                                 version=aws_rds.AuroraPostgresEngineVersion.VER_15_5),
@@ -157,17 +119,6 @@ class ChocolateFactoryChatbot(Stack):
                                                             enable_data_api=True,
                                                             credentials=aws_rds.Credentials.from_generated_secret('postgres')
                                                             )
-
-        # self.setup_rds_lambda.add_to_role_policy(
-        #     aws_iam.PolicyStatement(
-        #         effect=aws_iam.Effect.ALLOW,
-        #         actions=["secretsmanager:GetSecretValue"],
-        #         resources=[self.aurora_serverless_v2.secret.secret_arn]
-        #     )
-        # )
-        #
-        # #create a connection between aurora and lambda
-        # self.aurora_serverless_v2.connections.allow_from(self.setup_rds_lambda, aws_ec2.Port.tcp(5432))
 
         self.post_deploy_function = aws_lambda.Function(
             self,
