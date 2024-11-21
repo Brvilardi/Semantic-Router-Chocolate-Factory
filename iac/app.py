@@ -9,7 +9,7 @@ from setup_bedrock_kb import setup_bedrock_kb
 
 app = cdk.App()
 
-chocolate_factory_stack = ChocolateFactoryChatbot(app, "chocolate-factory-chatbot",
+chocolate_factory_stack = ChocolateFactoryChatbot(app, "chocolate-factory-chatbot-genai",
     env=cdk.Environment(account='667078243530', region='us-east-1'),
     # For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html
     )

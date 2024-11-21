@@ -82,11 +82,12 @@ def lambda_handler(event, context):
                 port=resource_properties["PORT"]
             )
             cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
-            return token
         elif event['RequestType'] == 'Update':
             cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
         else:
             cfnresponse.send(event, context, cfnresponse.FAILED, responseData)
+
+        return token
 
     except DuplicateSchema as e:
         print(f"Exception: {e}")
