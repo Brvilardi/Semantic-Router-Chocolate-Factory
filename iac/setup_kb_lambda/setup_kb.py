@@ -65,9 +65,12 @@ def lambda_handler(event, context):
     print(f"context: {context}")
 
     try:
+        token = ("%s.%s" % (id_generator(6), id_generator(16)))
+        responseData = {}
+        responseData['Token'] = token
 
         if event['RequestType'] == 'Delete':
-            cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
         elif event['RequestType'] == 'Create':
 
             resource_properties = event['ResourceProperties']
@@ -78,16 +81,12 @@ def lambda_handler(event, context):
                 password=json.loads(get_secret(resource_properties.get('SECRET_NAME')))['password'],
                 port=resource_properties["PORT"]
             )
-
-            token = ("%s.%s" % (id_generator(6), id_generator(16)))
-            responseData = {}
-            responseData['Token'] = token
             cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
             return token
         elif event['RequestType'] == 'Update':
-            cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
         else:
-            cfnresponse.send(event, context, cfnresponse.FAILED, {})
+            cfnresponse.send(event, context, cfnresponse.FAILED, responseData)
 
     except DuplicateSchema as e:
         print(f"Exception: {e}")

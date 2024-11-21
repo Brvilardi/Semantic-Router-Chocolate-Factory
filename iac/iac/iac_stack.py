@@ -45,6 +45,38 @@ class ChocolateFactoryChatbot(Stack):
             removal_policy=aws_cdk.RemovalPolicy.DESTROY
         )
 
+        self.upload_kb_files_function = aws_lambda.Function(
+            self,
+            "UploadKBFilesFunction",
+            runtime=aws_lambda.Runtime.PYTHON_3_9,
+            handler="upload_kb_files.lambda_handler",
+            code=aws_lambda.Code.from_asset("./upload_kb_files_lambda",
+                                            bundling={
+                                                "image": aws_lambda.Runtime.PYTHON_3_9.bundling_image,
+                                                "command": [
+                                                    'bash', '-c',
+                                                    'pip install -r requirements.txt -t /asset-output && cp -au . /asset-output'
+                                                ]}
+                                            ),
+            memory_size=1024,
+            environment={
+                "BUCKET_NAME": self.data_source_bucket.bucket_name
+            }
+        )
+
+        self.data_source_bucket.grant_read_write(self.upload_kb_files_function)
+        self.upload_kb_files_function.node.add_dependency(self.data_source_bucket)
+
+
+        self.upload_kb_files_resource = aws_cdk.CustomResource(
+            self,
+            "UploadKBFilesResource",
+            service_token=self.upload_kb_files_function.function_arn,
+            properties={}
+        )
+
+
+
         # self.database_password = Secret(
         #     self,
         #     "DatabaseSecret",
@@ -298,6 +330,7 @@ class ChocolateFactoryChatbot(Stack):
 
 
         self.start_kb_sync.node.add_dependency(self.knowledge_base_data_source)
+        self.start_kb_sync.node.add_dependency(self.upload_kb_files_resource)
 
 
 
