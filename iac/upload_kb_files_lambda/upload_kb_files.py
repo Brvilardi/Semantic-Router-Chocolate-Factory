@@ -18,6 +18,7 @@ def lambda_handler(event, context):
             s3 = boto3.resource('s3')
             bucket = s3.Bucket(os.environ['BUCKET_NAME'])
             for obj in bucket.objects.filter():
+                print(f"Object {obj} being deleted...")
                 s3.Object(bucket.name, obj.key).delete()
                 bucket.object_versions.filter(Prefix=obj.key).delete()
             cfnresponse.send(event, context, cfnresponse.SUCCESS, {})

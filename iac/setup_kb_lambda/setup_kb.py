@@ -69,8 +69,15 @@ def lambda_handler(event, context):
         responseData = {}
         responseData['Token'] = token
 
-        if event['RequestType'] == 'Delete':
+        if (event['RequestType'] == 'Delete' or event['RequestType'] == 'Update'):
+            responseData["Status"] = "Complete"
+            print("Delete or Update request type")
             cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+            print("Sent response")
+            return {
+                'statusCode': 200,
+                'body': json.dumps('Success')
+            }
         elif event['RequestType'] == 'Create':
 
             resource_properties = event['ResourceProperties']
@@ -81,8 +88,6 @@ def lambda_handler(event, context):
                 password=json.loads(get_secret(resource_properties.get('SECRET_NAME')))['password'],
                 port=resource_properties["PORT"]
             )
-            cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
-        elif event['RequestType'] == 'Update':
             cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
         else:
             cfnresponse.send(event, context, cfnresponse.FAILED, responseData)

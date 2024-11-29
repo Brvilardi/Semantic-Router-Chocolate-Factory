@@ -1,6 +1,6 @@
 from aws_cdk import (
     aws_lambda as lambda_, aws_s3, aws_lambda, aws_rds,
-    NestedStack, Duration, aws_ec2, aws_bedrock, aws_iam
+    NestedStack, Duration, aws_ec2, aws_bedrock, aws_iam, aws_logs
 )
 from constructs import Construct
 
@@ -32,6 +32,7 @@ class KnowledgeBase(Construct):
                                                 ]}
                                             ),
             memory_size=1024,
+            timeout=Duration.seconds(30),
             environment={
                 "BUCKET_NAME": self.data_source_bucket.bucket_name
             }
@@ -49,7 +50,7 @@ class KnowledgeBase(Construct):
 
         self.aurora_serverless_v2 = aws_rds.DatabaseCluster(self, "VectorDataBase",
                                                             engine=aws_rds.DatabaseClusterEngine.aurora_postgres(
-                                                                version=aws_rds.AuroraPostgresEngineVersion.VER_15_5),
+                                                                version=aws_rds.AuroraPostgresEngineVersion.VER_16_2),
                                                             serverless_v2_min_capacity=0.5,
                                                             serverless_v2_max_capacity=2,
                                                             writer=aws_rds.ClusterInstance.serverless_v2("writer"),
@@ -76,7 +77,7 @@ class KnowledgeBase(Construct):
                                                 ]},
                                             ),
             memory_size=1024,
-            timeout=Duration.seconds(30),
+            timeout=Duration.seconds(30)
         )
 
         self.post_deploy_function.add_to_role_policy(
@@ -99,7 +100,8 @@ class KnowledgeBase(Construct):
                 "USER": "postgres",
                 "SECRET_NAME": self.aurora_serverless_v2.secret.secret_name,
                 "PORT": "5432"
-            }
+            },
+            removal_policy=aws_cdk.RemovalPolicy.RETAIN #I was not able to fix the deletion issue on lambda, where the .send method was not reaching the CloudFormation API for some reason (on CREATE it reaches)
         )
 
         self.post_deploy_resource.node.add_dependency(self.aurora_serverless_v2)

@@ -14,11 +14,16 @@ class VPC(Construct):
         self.vpc = aws_ec2.Vpc(
                     self, "GenAIChatVPC",
                     max_azs = 2,
-                    nat_gateways = 0,
+                    nat_gateways = 2,
                     subnet_configuration=[
                         aws_cdk.aws_ec2.SubnetConfiguration(
                             subnet_type=aws_cdk.aws_ec2.SubnetType.PRIVATE_ISOLATED,
                             name="DatabaseSubnet",
+                            cidr_mask=22
+                        ),
+                        aws_cdk.aws_ec2.SubnetConfiguration(
+                            subnet_type=aws_cdk.aws_ec2.SubnetType.PUBLIC,
+                            name="PublicSubnet",
                             cidr_mask=22
                         )
                     ]
