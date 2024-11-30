@@ -1,6 +1,6 @@
 import aws_cdk
 from aws_cdk import (
-    Stack, aws_dynamodb
+    Stack, aws_dynamodb, aws_stepfunctions, cloudformation_include
 )
 from constructs import Construct
 
@@ -31,6 +31,20 @@ class ChocolateFactoryChatbot(Stack):
         self.vpc = VPC(self)
 
         self.knowledge_base = KnowledgeBase(self, vpc=self.vpc.vpc)
+
+        self.update_dynamo_summary_state_machine = cloudformation_include.CfnInclude(
+            self,
+            "UpdateDynamoSummaryStateMachine",
+            template_file="../state_machines/update_dynamo_summary.yaml"
+        )
+
+
+        self.chocolate_factory_state_machine = cloudformation_include.CfnInclude(
+            self,
+            "UpdateDynamoSummaryStateMachine",
+            template_file="../state_machines/chocolate_factory.yaml"
+        )
+
 
 
 

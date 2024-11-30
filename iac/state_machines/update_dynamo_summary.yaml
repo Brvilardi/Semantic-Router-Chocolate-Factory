@@ -1,0 +1,207 @@
+Resources:
+  StateMachined9c8d049:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      Definition:
+        Comment: A description of my state machine
+        StartAt: Load Variables
+        States:
+          Load Variables:
+            Type: Pass
+            Next: Query
+            Assign:
+              DYNAMO_TABLE: '{% $states.input.dynamo_table_name %}'
+              GENERATE_SUMMARY_PROMPTS:
+                SYSTEM: '{% $states.input.generate_summary_prompts.system %}'
+              GENERATE_SINGLE_MESSAGE_PROMPTS:
+                SYSTEM: '{% $states.input.generate_single_message_prompts.system %}'
+              SESSION_ID: '{% $states.input.session_id %}'
+              USER_INPUT: '{% $states.input.user_input %}'
+              MODEL_RESPONSE: '{% $states.input.model_response %}'
+          Query:
+            Type: Task
+            Arguments:
+              TableName: '{% $DYNAMO_TABLE %}'
+              KeyConditionExpression: pk = :session_id and begins_with(sk, :st)
+              ExpressionAttributeValues:
+                ':session_id':
+                  S: '{% $SESSION_ID %}'
+                ':st':
+                  S: message#
+            Resource: arn:aws:states:::aws-sdk:dynamodb:query
+            Next: Choice
+            Output:
+              number_of_itens_returned: '{% $states.result.Count %}'
+              items: '{% $states.result.Items %}'
+          Choice:
+            Type: Choice
+            Choices:
+              - Next: Update Summary
+                Condition: '{% $states.input.number_of_itens_returned > 0 %}'
+                Comment: Items exists
+            Default: Create initial summary
+          Update Summary:
+            Type: Task
+            Resource: arn:aws:states:::bedrock:invokeModel
+            Arguments:
+              ModelId: ${bedrockinvokeModel_ModelId_ebd47201}
+              Body:
+                anthropic_version: bedrock-2023-05-31
+                max_tokens: 800
+                temperature: 0.2
+                system: '{% $GENERATE_SUMMARY_PROMPTS.SYSTEM %}'
+                messages:
+                  - role: user
+                    content:
+                      - type: text
+                        text: >-
+                          {% 'Historico: <chat_history>' & $states.input.items &
+                          '</chat_history>
+
+                          Mensagem atual: <current_message>' & $USER_INPUT &
+                          '</current_message>
+
+                          Resposta da AI: <ai_response>' & $MODEL_RESPONSE &
+                          '</ai_response>' %}
+            Output:
+              summary: '{% $states.result.Body.content[0].text %}'
+            Next: Update summary in Dynamo Table
+          Create initial summary:
+            Type: Task
+            Resource: arn:aws:states:::bedrock:invokeModel
+            Arguments:
+              ModelId: ${bedrockinvokeModel_ModelId_ebd47201}
+              Body:
+                anthropic_version: bedrock-2023-05-31
+                max_tokens: 800
+                system: '{% $GENERATE_SINGLE_MESSAGE_PROMPTS.SYSTEM %}'
+                messages:
+                  - role: user
+                    content:
+                      - type: text
+                        text: >-
+                          {% 'Mensagem atual: <current_message>' & $USER_INPUT &
+                          '</current_message>
+
+                          Resposta da AI: <ai_response>' & $MODEL_RESPONSE &
+                          '</ai_response>' %}
+            Output:
+              summary: '{% $states.result.Body.content[0].text %}'
+            Next: Update summary in Dynamo Table
+          Update summary in Dynamo Table:
+            Type: Task
+            Resource: arn:aws:states:::dynamodb:putItem
+            Arguments:
+              TableName: '{% $DYNAMO_TABLE %}'
+              Item:
+                pk:
+                  S: '{% $SESSION_ID %}'
+                sk:
+                  S: summary
+                message:
+                  S: '{% $states.input.summary %}'
+            Next: Add user input into Chat history
+          Add user input into Chat history:
+            Type: Task
+            Resource: arn:aws:states:::dynamodb:putItem
+            Arguments:
+              TableName: '{% $DYNAMO_TABLE %}'
+              Item:
+                pk:
+                  S: '{% $SESSION_ID %}'
+                sk:
+                  S: '{% ''message#'' & $states.context.Execution.StartTime %}'
+                message:
+                  S: '{% $USER_INPUT %}'
+                ai_response:
+                  S: '{% $MODEL_RESPONSE %}'
+            End: true
+        QueryLanguage: JSONata
+      DefinitionSubstitutions:
+        bedrockinvokeModel_ModelId_ebd47201: >-
+          arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-haiku-20240307-v1:0
+      RoleArn:
+        Fn::GetAtt:
+          - Rolea082f120
+          - Arn
+      StateMachineName: StateMachined9c8d049
+      StateMachineType: EXPRESS
+      EncryptionConfiguration:
+        Type: AWS_OWNED_KEY
+      LoggingConfiguration:
+        Level: ALL
+        IncludeExecutionData: true
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn:
+                Fn::GetAtt:
+                  - LogGroupe4884199
+                  - Arn
+  Rolea082f120:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: StepFunctions_IAM_ROLE_generate_summary_wonkab6705468
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
+  Policy0ffdb30b:
+    Type: AWS::IAM::RolePolicy
+    Properties:
+      PolicyName: XRayAccessPolicybf4904c2
+      RoleName:
+        Ref: Rolea082f120
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - xray:PutTraceSegments
+              - xray:PutTelemetryRecords
+              - xray:GetSamplingRules
+              - xray:GetSamplingTargets
+            Resource:
+              - '*'
+  Policy641fcd59:
+    Type: AWS::IAM::RolePolicy
+    Properties:
+      PolicyName: CloudWatchLogsDeliveryFullAccessPolicyeb385f92
+      RoleName:
+        Ref: Rolea082f120
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogDelivery
+              - logs:GetLogDelivery
+              - logs:UpdateLogDelivery
+              - logs:DeleteLogDelivery
+              - logs:ListLogDeliveries
+              - logs:PutResourcePolicy
+              - logs:DescribeResourcePolicies
+              - logs:DescribeLogGroups
+            Resource: '*'
+  Policy1b6ccbdf:
+    Type: AWS::IAM::RolePolicy
+    Properties:
+      PolicyName: bedrock_full9f23e04a
+      RoleName:
+        Ref: Rolea082f120
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: VisualEditor0
+            Effect: Allow
+            Action: bedrock:*
+            Resource: '*'
+  LogGroupe4884199:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/vendedlogs/states/StateMachined9c8d049-Logs
