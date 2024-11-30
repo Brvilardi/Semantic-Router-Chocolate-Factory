@@ -35,14 +35,14 @@ class ChocolateFactoryChatbot(Stack):
         self.update_dynamo_summary_state_machine = cloudformation_include.CfnInclude(
             self,
             "UpdateDynamoSummaryStateMachine",
-            template_file="../state_machines/update_dynamo_summary.yaml"
+            template_file="./state_machines/update_dynamo_summary.yaml"
         )
 
 
         self.chocolate_factory_state_machine = cloudformation_include.CfnInclude(
             self,
-            "UpdateDynamoSummaryStateMachine",
-            template_file="../state_machines/chocolate_factory.yaml"
+            "ChocolateFactoryStateMachine",
+            template_file="./state_machines/chocolate_factory.yaml"
         )
 
 
