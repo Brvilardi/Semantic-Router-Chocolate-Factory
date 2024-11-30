@@ -1,0 +1,116 @@
+Comment: A description of my state machine
+StartAt: Load Variables
+States:
+  Load Variables:
+    Type: Pass
+    Next: Query
+    Assign:
+      DYNAMO_TABLE: '{% $states.input.dynamo_table_name %}'
+      GENERATE_SUMMARY_PROMPTS:
+        SYSTEM: '{% $states.input.generate_summary_prompts.system %}'
+      GENERATE_SINGLE_MESSAGE_PROMPTS:
+        SYSTEM: '{% $states.input.generate_single_message_prompts.system %}'
+      SESSION_ID: '{% $states.input.session_id %}'
+      USER_INPUT: '{% $states.input.user_input %}'
+      MODEL_RESPONSE: '{% $states.input.model_response %}'
+  Query:
+    Type: Task
+    Arguments:
+      TableName: '{% $DYNAMO_TABLE %}'
+      KeyConditionExpression: pk = :session_id and begins_with(sk, :st)
+      ExpressionAttributeValues:
+        ':session_id':
+          S: '{% $SESSION_ID %}'
+        ':st':
+          S: message#
+    Resource: arn:aws:states:::aws-sdk:dynamodb:query
+    Next: Choice
+    Output:
+      number_of_itens_returned: '{% $states.result.Count %}'
+      items: '{% $states.result.Items %}'
+  Choice:
+    Type: Choice
+    Choices:
+      - Next: Update Summary
+        Condition: '{% $states.input.number_of_itens_returned > 0 %}'
+        Comment: Items exists
+    Default: Create initial summary
+  Update Summary:
+    Type: Task
+    Resource: arn:aws:states:::bedrock:invokeModel
+    Arguments:
+      ModelId: >-
+        arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-haiku-20240307-v1:0
+      Body:
+        anthropic_version: bedrock-2023-05-31
+        max_tokens: 800
+        temperature: 0.2
+        system: '{% $GENERATE_SUMMARY_PROMPTS.SYSTEM %}'
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: >-
+                  {% 'Historico: <chat_history>' & $states.input.items &
+                  '</chat_history>
+
+                  Mensagem atual: <current_message>' & $USER_INPUT &
+                  '</current_message>
+
+                  Resposta da AI: <ai_response>' & $MODEL_RESPONSE &
+                  '</ai_response>' %}
+    Output:
+      summary: '{% $states.result.Body.content[0].text %}'
+    Next: Update summary in Dynamo Table
+  Create initial summary:
+    Type: Task
+    Resource: arn:aws:states:::bedrock:invokeModel
+    Arguments:
+      ModelId: >-
+        arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-haiku-20240307-v1:0
+      Body:
+        anthropic_version: bedrock-2023-05-31
+        max_tokens: 800
+        system: '{% $GENERATE_SINGLE_MESSAGE_PROMPTS.SYSTEM %}'
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: >-
+                  {% 'Mensagem atual: <current_message>' & $USER_INPUT &
+                  '</current_message>
+
+                  Resposta da AI: <ai_response>' & $MODEL_RESPONSE &
+                  '</ai_response>' %}
+    Output:
+      summary: '{% $states.result.Body.content[0].text %}'
+    Next: Update summary in Dynamo Table
+  Update summary in Dynamo Table:
+    Type: Task
+    Resource: arn:aws:states:::dynamodb:putItem
+    Arguments:
+      TableName: '{% $DYNAMO_TABLE %}'
+      Item:
+        pk:
+          S: '{% $SESSION_ID %}'
+        sk:
+          S: summary
+        message:
+          S: '{% $states.input.summary %}'
+    Next: Add user input into Chat history
+  Add user input into Chat history:
+    Type: Task
+    Resource: arn:aws:states:::dynamodb:putItem
+    Arguments:
+      TableName: '{% $DYNAMO_TABLE %}'
+      Item:
+        pk:
+          S: '{% $SESSION_ID %}'
+        sk:
+          S: '{% ''message#'' & $states.context.Execution.StartTime %}'
+        message:
+          S: '{% $USER_INPUT %}'
+        ai_response:
+          S: '{% $MODEL_RESPONSE %}'
+    End: true
+QueryLanguage: JSONata

@@ -1,0 +1,304 @@
+QueryLanguage: JSONata
+Comment: A description of my state machine
+StartAt: Load Variables
+States:
+  Load Variables:
+    Type: Pass
+    Assign:
+      DYNAMO_TABLE: '{% $states.input.configuration.chat_table_name %}'
+      UPDATE_CHAT_HISTORY_STEPFUNCTION: '{% $states.input.update_chat_history_stepfunction %}'
+      KNOWLEDGE_BASE: '{% $states.input.configuration.knowledge_base_id %}'
+      TECHNICAL_QUESTION_PROMPTS:
+        IMPROVE_QUESTION_PROMPTS:
+          SYSTEM: >-
+            {%
+            $states.input.configuration.technical_question_prompts.improve_question_prompts.system
+            %}
+        GENERATE_ANSWER_PROMPTS:
+          SYSTEM: >-
+            {%
+            $states.input.configuration.technical_question_prompts.generate_answer_prompts.system
+            %}
+      SEMANTIC_ROUTER_PROMPTS:
+        SYSTEM: '{% $states.input.configuration.semantic_router_prompts.system %}'
+      ASK_MORE_INFORMATION_PROMPTS:
+        SYSTEM: '{% $states.input.configuration.ask_more_information_prompts.system %}'
+      INDIVIDUAL_REQUEST_PROMPTS:
+        CREATE_QUESTION_PROMPTS:
+          SYSTEM: >-
+            {%
+            $states.input.configuration.individual_request_prompts.create_question_prompts.system
+            %}
+        EXTRACT_INFORMATION_PROMPTS:
+          SYSTEM: >-
+            {%
+            $states.input.configuration.individual_request_prompts.extract_information_prompts.system
+            %}
+        FINISH_REQUEST_PROMPTS:
+          SYSTEM: >-
+            {%
+            $states.input.configuration.individual_request_prompts.finish_request_prompts.system
+            %}
+      CHAT_HISTORY_PROMPTS:
+        GENERATE_SUMMARY_PROMPTS:
+          SYSTEM: >-
+            {%
+            $states.input.configuration.chat_history_prompts.generate_summary_prompts.system
+            %}
+        GENERATE_SINGLE_MESSAGE_PROMPTS:
+          SYSTEM: >-
+            {%
+            $states.input.configuration.chat_history_prompts.generate_single_message_prompts.system
+            %}
+      SESSION_ID: '{% $states.input.session_id %}'
+      USER_INPUT: '{% $states.input.user_input %}'
+    Next: Get Chat History
+  Get Chat History:
+    Type: Task
+    Resource: arn:aws:states:::dynamodb:getItem
+    Arguments:
+      TableName: '{% $DYNAMO_TABLE %}'
+      Key:
+        pk:
+          S: '{% $SESSION_ID %}'
+        sk:
+          S: summary
+    Next: Semantic Router
+    Assign:
+      CHAT_HISTORY: >-
+        {% $exists($states.result.Item) ? $states.result.Item.message.S : 'None'
+        %}
+  Semantic Router:
+    Type: Task
+    Resource: arn:aws:states:::bedrock:invokeModel
+    Arguments:
+      ModelId: >-
+        arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-haiku-20240307-v1:0
+      Body:
+        anthropic_version: bedrock-2023-05-31
+        max_tokens: 200
+        temperature: 0.1
+        system: '{% $SEMANTIC_ROUTER_PROMPTS.SYSTEM %}'
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: |-
+                  {% 'History: ' & $CHAT_HISTORY & '
+                  Message: ' & $USER_INPUT %}
+          - role: assistant
+            content:
+              - type: text
+                text: >-
+                  De acordo com a intenção do usuário e as rotas
+                  disponibilizadas, a rota é <route>
+        stop_sequences:
+          - </route>
+    Assign:
+      ROUTE_SELECTED: '{% $states.result.Body.content[0].text %}'
+    Next: Choice
+  Choice:
+    Type: Choice
+    Choices:
+      - Next: Passar para atendente
+        Condition: '{% $ROUTE_SELECTED = ''falar_com_atendente'' %}'
+      - Next: Extract Information
+        Condition: '{% $ROUTE_SELECTED = ''pedido_pessoa_fisica'' %}'
+      - Next: Placeholder - Create opportunity in CRM
+        Condition: '{% $ROUTE_SELECTED = ''pedido_pessoa_juridica'' %}'
+      - Next: Improve question for RAG
+        Condition: '{% $ROUTE_SELECTED = ''duvida_tecnica'' %}'
+    Default: Ask for more information
+  Passar para atendente:
+    Type: Pass
+    Next: Format Response
+    Output:
+      response: Passando para um atendente humano...
+  Ask for more information:
+    Type: Task
+    Resource: arn:aws:states:::bedrock:invokeModel
+    Arguments:
+      ModelId: >-
+        arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0
+      Body:
+        anthropic_version: bedrock-2023-05-31
+        max_tokens: 400
+        temperature: 0.3
+        system: '{% $ASK_MORE_INFORMATION_PROMPTS.SYSTEM %}'
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: |-
+                  {% 'History: ' & $CHAT_HISTORY & '
+                  Message: ' & $USER_INPUT %}
+    Next: Format Response
+    Output:
+      response: '{% $states.result.Body.content[0].text %}'
+  Format Response:
+    Type: Pass
+    Output:
+      message: teste
+      response:
+        model_response: '{% $states.input.response %}'
+        human_assistant: '{% $ROUTE_SELECTED = ''falar_com_atendente'' %}'
+        model_usage: 200
+        route: '{% $ROUTE_SELECTED %}'
+        summary: '{% $CHAT_HISTORY %}'
+      workflow_execution_time: '{% ($millis() - $toMillis($states.context.Execution.StartTime) ) %}'
+      user_input: '{% $USER_INPUT %}'
+      session_id: '{% $SESSION_ID %}'
+    Next: Step Functions StartExecution
+  Step Functions StartExecution:
+    Type: Task
+    Resource: arn:aws:states:::states:startExecution
+    Arguments:
+      StateMachineArn: '{% $UPDATE_CHAT_HISTORY_STEPFUNCTION %}'
+      Input:
+        session_id: '{% $SESSION_ID %}'
+        generate_summary_prompts:
+          system: '{% $CHAT_HISTORY_PROMPTS.GENERATE_SUMMARY_PROMPTS.SYSTEM %}'
+        generate_single_message_prompts:
+          system: '{% $CHAT_HISTORY_PROMPTS.GENERATE_SINGLE_MESSAGE_PROMPTS.SYSTEM %}'
+        dynamo_table_name: '{% $DYNAMO_TABLE %}'
+        user_input: '{% $USER_INPUT %}'
+        model_response: '{% $states.input.response.model_response %}'
+        AWS_STEP_FUNCTIONS_STARTED_BY_EXECUTION_ID: '{% $states.context.Execution.Id %}'
+    End: true
+  Extract Information:
+    Type: Task
+    Resource: arn:aws:states:::bedrock:invokeModel
+    Arguments:
+      ModelId: >-
+        arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-haiku-20240307-v1:0
+      Body:
+        anthropic_version: bedrock-2023-05-31
+        max_tokens: 200
+        temperature: 0.1
+        system: '{% $INDIVIDUAL_REQUEST_PROMPTS.EXTRACT_INFORMATION_PROMPTS.SYSTEM%}'
+        stop_sequences:
+          - '}'
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: |-
+                  {% 'History: ' & $CHAT_HISTORY & '
+                  Message: ' & $USER_INPUT %}
+          - role: assistant
+            content:
+              - type: text
+                text: >-
+                  De acordo com as informações do usuário, a resposta em JSON
+                  é:{
+    Output:
+      information: '{% $parse(''{'' & $states.result.Body.content[0].text & ''}'' ) %}'
+    Next: Enough Information?
+  Enough Information?:
+    Type: Choice
+    Choices:
+      - Next: Create Question
+        Condition: '{% $count($states.input.information.* [$ = null or $ = "none"]) > 0 %}'
+        Comment: Has None
+    Default: Placeholder - Performs the request
+  Create Question:
+    Type: Task
+    Resource: arn:aws:states:::bedrock:invokeModel
+    Arguments:
+      ModelId: >-
+        arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0
+      Body:
+        anthropic_version: bedrock-2023-05-31
+        max_tokens: 400
+        temperature: 0.1
+        system: '{% $INDIVIDUAL_REQUEST_PROMPTS.CREATE_QUESTION_PROMPTS.SYSTEM %}'
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: |-
+                  {% 'Informações coletadas até agora: ' & $CHAT_HISTORY & '
+                   mensagem: ' & $USER_INPUT %}
+    Output:
+      response: '{% $states.result.Body.content[0].text %}'
+    Next: Format Response
+  Placeholder - Performs the request:
+    Type: Pass
+    Next: Finish request
+  Finish request:
+    Type: Task
+    Resource: arn:aws:states:::bedrock:invokeModel
+    Arguments:
+      ModelId: >-
+        arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0
+      Body:
+        anthropic_version: bedrock-2023-05-31
+        max_tokens: 400
+        system: '{% $INDIVIDUAL_REQUEST_PROMPTS.FINISH_REQUEST_PROMPTS.SYSTEM %}'
+        temperature: 0.5
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: '{% $string($states.input.information) %}'
+    Next: Format Response
+    Output:
+      response: '{% $states.result.Body.content[0].text %}'
+  Placeholder - Create opportunity in CRM:
+    Type: Pass
+    Next: Passar para atendente
+  Improve question for RAG:
+    Type: Task
+    Resource: arn:aws:states:::bedrock:invokeModel
+    Arguments:
+      ModelId: >-
+        arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-haiku-20240307-v1:0
+      Body:
+        anthropic_version: bedrock-2023-05-31
+        max_tokens: 200
+        system: '{% $TECHNICAL_QUESTION_PROMPTS.IMPROVE_QUESTION_PROMPTS.SYSTEM %}'
+        temperature: 0.1
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: >-
+                  {% 'Resumo do histórico: ' & $CHAT_HISTORY & 'mensagem: ' &
+                  $USER_INPUT & '. Gere uma pergunta que será redireionada para
+                  a base de conhecimento, com a técnica de RAG' %}
+    Output:
+      question: '{% $states.result.Body.content[0].text %}'
+    Next: Perform RAG query
+  Perform RAG query:
+    Type: Task
+    Arguments:
+      KnowledgeBaseId: '{% $KNOWLEDGE_BASE %}'
+      RetrievalQuery:
+        Text: '{% $states.input.question %}'
+    Resource: arn:aws:states:::aws-sdk:bedrockagentruntime:retrieve
+    Output:
+      rag_response: '{% $states.result.RetrievalResults %}'
+    Next: Generate Answer
+  Generate Answer:
+    Type: Task
+    Resource: arn:aws:states:::bedrock:invokeModel
+    Arguments:
+      ModelId: >-
+        arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0
+      Body:
+        anthropic_version: bedrock-2023-05-31
+        max_tokens: 1000
+        system: '{% $TECHNICAL_QUESTION_PROMPTS.GENERATE_ANSWER_PROMPTS.SYSTEM %}'
+        temperature: 0.4
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: >-
+                  {% 'Resumo do histórico: ' & $CHAT_HISTORY & 'mensagem: ' &
+                  $USER_INPUT & '. Informações da base de conhecimento
+                  <knowledebase>' & $states.input.rag_response &
+                  '</knowledebase>' %}
+    Output:
+      response: '{% $states.result.Body.content[0].text %}'
+    Next: Format Response
