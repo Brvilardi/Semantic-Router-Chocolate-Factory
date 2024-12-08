@@ -1,6 +1,6 @@
 import aws_cdk
 from aws_cdk import (
-    Stack, aws_dynamodb, aws_stepfunctions, cloudformation_include
+    Stack, aws_dynamodb, aws_stepfunctions, cloudformation_include, aws_lambda
 )
 from constructs import Construct
 
@@ -43,6 +43,20 @@ class ChocolateFactoryChatbot(Stack):
             self,
             "ChocolateFactoryStateMachine",
             template_file="./state_machines/chocolate_factory.yaml"
+        )
+
+        self.api_lambda = aws_lambda.Function(
+            self,
+            "ChocolateFactpryApiLambda",
+            runtime=aws_lambda.Runtime.PYTHON_3_8,
+            handler="api.lambda_handler",
+            code=aws_lambda.Code.from_asset("../back-end"),
+            timeout=aws_cdk.Duration.seconds(15),
+            environment={
+                "CHAT_TABLE_NAME": self.dynamodb_table.table_name,
+                "STEP_FUNCTIONS_ARN": "arn:aws:states:us-east-1:667078243530:express:StateMachinef45946c0:27d36d4a-f9e9-4880-a29e-c698baaf362f:4fcd1d39-f8bc-40c6-8b30-c94b7a3388c7",
+                "KNOWLEDGE_BASE_ID": self.knowledge_base.knowledge_base.attr_knowledge_base_id
+            }
         )
 
 
