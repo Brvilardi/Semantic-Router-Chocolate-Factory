@@ -78,7 +78,7 @@ def lambda_handler(event, context):
     )
     print(response)
 
-lambda_handler({'body': '{"user_input": "hello", "session_id": "123"}'}, None)
+
 
 
 
