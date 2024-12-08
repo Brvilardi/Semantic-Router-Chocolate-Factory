@@ -148,7 +148,7 @@ States:
         StringEquals: falar_com_atendente
         Next: Placeholder para redirecionar para atendente
       - Variable: '$.router.route_selected '
-        StringEquals: duvida_tecnica
+        StringEquals: technical_question_prompts
         Next: Ajustar pergunta para base de conhecimento
     Default: Pedir mais informações
   Ajustar pergunta para base de conhecimento:

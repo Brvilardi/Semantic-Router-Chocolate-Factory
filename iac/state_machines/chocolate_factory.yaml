@@ -11,7 +11,7 @@ Resources:
             Type: Pass
             Assign:
               DYNAMO_TABLE: '{% $states.input.configuration.chat_table_name %}'
-              UPDATE_CHAT_HISTORY_STEPFUNCTION: '{% $states.input.update_chat_history_stepfunction %}'
+              UPDATE_CHAT_HISTORY_STEPFUNCTION: '{% $states.input.configuration.update_chat_history_stepfunction %}'
               KNOWLEDGE_BASE: '{% $states.input.configuration.knowledge_base_id %}'
               TECHNICAL_QUESTION_PROMPTS:
                 IMPROVE_QUESTION_PROMPTS:
@@ -116,7 +116,7 @@ Resources:
               - Next: Placeholder - Create opportunity in CRM
                 Condition: '{% $ROUTE_SELECTED = ''pedido_pessoa_juridica'' %}'
               - Next: Improve question for RAG
-                Condition: '{% $ROUTE_SELECTED = ''duvida_tecnica'' %}'
+                Condition: '{% $ROUTE_SELECTED = ''technical_question_prompts'' %}'
             Default: Ask for more information
           Passar para atendente:
             Type: Pass

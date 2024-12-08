@@ -187,6 +187,7 @@ Resources:
               - logs:PutResourcePolicy
               - logs:DescribeResourcePolicies
               - logs:DescribeLogGroups
+              - logs:*
             Resource: '*'
   Policy1b6ccbdf:
     Type: AWS::IAM::RolePolicy
