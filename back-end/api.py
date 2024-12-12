@@ -5,19 +5,12 @@ from sys import getsizeof
 
 import boto3
 
-# configuration = {
-#     'chat_table_name': os.environ['CHAT_TABLE_NAME'],
-#     'update_chat_history_stepfunction': os.environ['STEP_FUNCTIONS_ARN'],
-#     'knowledge_base_id': os.environ['KNOWLEDGE_BASE_ID'],
-# }
-
-
-
 configuration = {
-    'chat_table_name': "chocolate-factory-chatbot-DynamoTableB2B22E15-OQYZ492LZMU0",
-    'update_chat_history_stepfunction': "arn:aws:states:us-east-1:667078243530:stateMachine:StateMachined9c8d049",
-    'knowledge_base_id': "ABWXMDXUBA",
+    'chat_table_name': os.environ['CHAT_TABLE_NAME'],
+    'update_chat_history_stepfunction': os.environ['DYNAMO_UPDATE_STATE_MACHINE_ARN'],
+    'knowledge_base_id': os.environ['KNOWLEDGE_BASE_ID'],
 }
+
 
 prompts = {}
 
@@ -42,7 +35,7 @@ for content in directory_contents:
                     print(f"Sample: {prompts[content][file_name]['system'][:50]}")
 
     if ".txt" in content:
-        print(f"Loading {file}")
+        print(f"Loading {content}")
         file_name = content.split(".")[0]
         prompts[file_name] = {}
         with open(f'prompt/{content}') as f:
@@ -57,7 +50,7 @@ step_function_client = boto3.client('stepfunctions')
 
 def lambda_handler(event, context):
 
-    body = json.loads(event['body'])
+    body = event
     if not body.get('user_input') or not body.get('session_id'):
         return {
             'statusCode': 400,
@@ -69,7 +62,7 @@ def lambda_handler(event, context):
 
 
     response = step_function_client.start_sync_execution(
-        stateMachineArn="arn:aws:states:us-east-1:667078243530:stateMachine:StateMachinef45946c0",
+        stateMachineArn=os.environ['CHOCOLATE_FACTORY_STATE_MACHINE_ARN'],
         input=json.dumps({
             'user_input': user_input,
             'session_id': session_id,
@@ -77,6 +70,14 @@ def lambda_handler(event, context):
         })
     )
     print(response)
+
+    #get the output from the state machine
+    output = json.loads(response['output'])
+
+    return {
+        'statusCode': 200,
+        'body': json.dumps(output)
+    }
 
 
 

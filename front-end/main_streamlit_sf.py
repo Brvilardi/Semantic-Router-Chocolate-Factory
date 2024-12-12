@@ -7,41 +7,45 @@ import streamlit as st
 from streamlit.runtime import get_instance
 from streamlit.runtime.scriptrunner import get_script_run_ctx
 
-if argv[1] != "--step-function-arn" or not match(
-    "arn:aws:states:[a-z]{2}-[a-z]+-[0-9]:([0-9]{12}):stateMachine:.+",
+if argv[1] != "--lambda-function-arn" or not match(
+    "arn:aws:lambda:[a-z]{2}-[a-z]+-[0-9]:([0-9]{12}):function:.+",
     argv[2],
     IGNORECASE,
 ):
-    print("Invalid arg or ARN. Usage: streamlit run <script.py> -- --step-function-arn <step-function-arn>")
+    print("Invalid arg or ARN. Usage: streamlit run <script.py> -- --lambda-function-arn <step-function-arn>")
     exit(1)
 
-STEP_FUNCTION_ARN = argv[2]
+LAMBDA_FUNCTION_ARN = argv[2]
 
-step_functions = boto3.client('stepfunctions')
+aws_lambda = boto3.client('lambda')
 
 
-def invoke_step_function(question, session_id):
+def invoke_lambda_function(question, session_id):
     payload = {
         "user_input": question,
         "session_id": session_id,
     }
 
-    response = step_functions.start_sync_execution(
-        stateMachineArn=STEP_FUNCTION_ARN,
-        input=json.dumps(payload)
+    lambda_response = aws_lambda.invoke(
+        FunctionName=LAMBDA_FUNCTION_ARN,
+        InvocationType='RequestResponse',
+        Payload=json.dumps(payload)
     )
+
     from pprint import pprint
 
-    pprint(response)
+    pprint(lambda_response)
 
-    if response['status'] == 'FAILED':
-        raise Exception(response['cause'])
+    if lambda_response['StatusCode'] != 200:
+        raise Exception(lambda_response)
 
-    output = json.loads(response['output'])
-    response = output["response"]
-    answer_time = output["workflow_execution_time"]
+    payload = json.loads(lambda_response['Payload'].read())
+    body = json.loads(payload['body'])
+    print("output: ", payload)
+    print(payload.get('statusCode'))
+    answer_time = body["workflow_execution_time"]
 
-    return response, answer_time
+    return body, answer_time
 
 
 def get_chat_session():
@@ -89,7 +93,7 @@ if question := st.chat_input("Faça sua pergunta"):
 
             print("Session ID: ", session_id)
 
-            resp = invoke_step_function(
+            resp = invoke_lambda_function(
                 question, session_id
             )
 
