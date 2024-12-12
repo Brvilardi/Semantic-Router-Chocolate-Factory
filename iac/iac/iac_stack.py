@@ -1,6 +1,6 @@
 import aws_cdk
 from aws_cdk import (
-    Stack, aws_dynamodb, aws_stepfunctions, cloudformation_include, aws_lambda
+    Stack, aws_dynamodb, aws_stepfunctions, cloudformation_include, aws_lambda, aws_iam
 )
 from constructs import Construct
 
@@ -45,19 +45,40 @@ class ChocolateFactoryChatbot(Stack):
             template_file="./state_machines/chocolate_factory.yaml"
         )
 
+        self_api_lambda_role = aws_iam.Role(
+            self,
+            "ChocolateFactoryApiLambdaRole",
+            assumed_by=aws_iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                aws_iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole"),
+                aws_iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaVPCAccessExecutionRole"),
+                aws_iam.ManagedPolicy.from_aws_managed_policy_name("AWSStepFunctionsFullAccess"), #todo make more granular
+            ]
+        )
+
+        # chocolate_factory_state_machine_arn = self.chocolate_factory_state_machine.get_resource("StateMachinef45946c0")
+        # update_dynamo_summary_state_machine_arn = self.update_dynamo_summary_state_machine.get_resource("StateMachined9c8d049")
+
+        # print(f"Chocolate Factory State Machine ARN: {chocolate_factory_state_machine_arn}")
+        # print(f"Update Dynamo Summary State Machine ARN: {update_dynamo_summary_state_machine_arn}")
+
         self.api_lambda = aws_lambda.Function(
             self,
             "ChocolateFactpryApiLambda",
-            runtime=aws_lambda.Runtime.PYTHON_3_8,
+            runtime=aws_lambda.Runtime.PYTHON_3_12,
             handler="api.lambda_handler",
             code=aws_lambda.Code.from_asset("../back-end"),
+            role=self_api_lambda_role,
             timeout=aws_cdk.Duration.seconds(15),
             environment={
                 "CHAT_TABLE_NAME": self.dynamodb_table.table_name,
-                "STEP_FUNCTIONS_ARN": "arn:aws:states:us-east-1:667078243530:express:StateMachinef45946c0:27d36d4a-f9e9-4880-a29e-c698baaf362f:4fcd1d39-f8bc-40c6-8b30-c94b7a3388c7",
+                "DYNAMO_UPDATE_STATE_MACHINE_ARN": "arn:aws:states:us-east-1:667078243530:stateMachine:StateMachined9c8d049",
+                "CHOCOLATE_FACTORY_STATE_MACHINE_ARN": "arn:aws:states:us-east-1:667078243530:stateMachine:StateMachinef45946c0",
                 "KNOWLEDGE_BASE_ID": self.knowledge_base.knowledge_base.attr_knowledge_base_id
-            }
+            },
         )
+
+
 
 
 
@@ -83,6 +104,10 @@ class ChocolateFactoryChatbot(Stack):
         aws_cdk.CfnOutput(self, "DynamoTableName",
                           export_name="DynamoTableName",
                           value=self.dynamodb_table.table_name)
+
+        aws_cdk.CfnOutput(self, "LambdaAPI",
+                          export_name="LambdaAPI",
+                          value=self.api_lambda.function_arn)
 
 
 

@@ -150,7 +150,7 @@ Resources:
             Action: sts:AssumeRole
       MaxSessionDuration: 3600
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
+        - arn:aws:iam::aws:policy/AdministratorAccess
   Policy0ffdb30b:
     Type: AWS::IAM::RolePolicy
     Properties:
