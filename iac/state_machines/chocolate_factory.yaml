@@ -166,14 +166,14 @@ Resources:
               session_id: '{% $SESSION_ID %}'
             Assign:
               model_response: '{% $states.input.response %}'
-              model_usage: 200
+              model_usage: 200 #todo auto increment
               route: '{% $ROUTE_SELECTED %}'
               summary: '{% $CHAT_HISTORY %}'
               workflow_execution_time: >-
                 {% ($millis() - $toMillis($states.context.Execution.StartTime) )
                 %}
-            Next: Step Functions StartExecution
-          Step Functions StartExecution:
+            Next: Update Chat History
+          Update Chat History:
             Type: Task
             Output:
               model_response: '{% $model_response %}'
