@@ -1,6 +1,7 @@
 # Semantic-Router-Chocolate-Factory
 
 ![logo.jpeg](front-end/logo.jpeg)
+*Imagem gerada pelo modelo Stable Image Ultra 1.0, via Amazon Bedrock*
 
 ## Introdução
 Este projeto demonstra o poder de um roteador semântico utilizando AWS Step Functions e Amazon Bedrock para criar uma solução inovadora e inteligente. Inspirado no universo mágico de Willy Wonka ✨, o caso de uso consiste em um chatbot para atendimento de uma fábrica de chocolates, capaz de oferecer respostas precisas 🍬 e personalizadas aos clientes.
