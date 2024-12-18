@@ -6,6 +6,7 @@ from constructs import Construct
 
 from .kb_component import KnowledgeBase
 from .network_component import VPC
+from .state_machines_component import StateMachines
 
 
 class ChocolateFactoryChatbot(Stack):
@@ -32,18 +33,7 @@ class ChocolateFactoryChatbot(Stack):
 
         self.knowledge_base = KnowledgeBase(self, vpc=self.vpc.vpc)
 
-        self.update_dynamo_summary_state_machine = cloudformation_include.CfnInclude(
-            self,
-            "UpdateDynamoSummaryStateMachine",
-            template_file="./state_machines/update_dynamo_summary.yaml"
-        )
 
-
-        self.chocolate_factory_state_machine = cloudformation_include.CfnInclude(
-            self,
-            "ChocolateFactoryStateMachine",
-            template_file="./state_machines/chocolate_factory.yaml"
-        )
 
         self_api_lambda_role = aws_iam.Role(
             self,
@@ -62,6 +52,8 @@ class ChocolateFactoryChatbot(Stack):
         # print(f"Chocolate Factory State Machine ARN: {chocolate_factory_state_machine_arn}")
         # print(f"Update Dynamo Summary State Machine ARN: {update_dynamo_summary_state_machine_arn}")
 
+        self.state_machines = StateMachines(self, dynamo_table=self.dynamodb_table, knowledge_base=self.knowledge_base)
+
         self.api_lambda = aws_lambda.Function(
             self,
             "ChocolateFactpryApiLambda",
@@ -72,8 +64,8 @@ class ChocolateFactoryChatbot(Stack):
             timeout=aws_cdk.Duration.seconds(15),
             environment={
                 "CHAT_TABLE_NAME": self.dynamodb_table.table_name,
-                "DYNAMO_UPDATE_STATE_MACHINE_ARN": "arn:aws:states:us-east-1:667078243530:stateMachine:StateMachined9c8d049",
-                "CHOCOLATE_FACTORY_STATE_MACHINE_ARN": "arn:aws:states:us-east-1:667078243530:stateMachine:StateMachinef45946c0",
+                "DYNAMO_UPDATE_STATE_MACHINE_ARN": self.state_machines.update_dynamo_summary_state_machine_arn,
+                "CHOCOLATE_FACTORY_STATE_MACHINE_ARN": self.state_machines.chocolate_factory_state_machine_arn,
                 "KNOWLEDGE_BASE_ID": self.knowledge_base.knowledge_base.attr_knowledge_base_id
             },
         )

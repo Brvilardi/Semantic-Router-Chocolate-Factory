@@ -1,5 +1,11 @@
+Parameters:
+  IamRoleArn:
+    Type: String
+  LogGroupArn:
+    Type: String
+
 Resources:
-  StateMachinef45946c0:
+  CFChocolateFactory:
     Type: AWS::StepFunctions::StateMachine
     Properties:
       Definition:
@@ -116,7 +122,7 @@ Resources:
               - Next: Placeholder - Create opportunity in CRM
                 Condition: '{% $ROUTE_SELECTED = ''pedido_pessoa_juridica'' %}'
               - Next: Improve question for RAG
-                Condition: '{% $ROUTE_SELECTED = ''technical_question_prompts'' %}'
+                Condition: '{% $ROUTE_SELECTED = ''duvida_tecnica'' %}'
             Default: Ask for more information
           Passar para atendente:
             Type: Pass
@@ -306,6 +312,13 @@ Resources:
             Next: Perform RAG query
           Perform RAG query:
             Type: Task
+            Retry:
+              - ErrorEquals:
+                  - States.IntrinsicFailure
+                BackoffRate: 2
+                IntervalSeconds: 5
+                MaxAttempts: 3
+                Comment: Aurora scale to 0
             Arguments:
               KnowledgeBaseId: '{% $KNOWLEDGE_BASE %}'
               RetrievalQuery:
@@ -343,11 +356,8 @@ Resources:
           arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-haiku-20240307-v1:0
         bedrockinvokeModel_ModelId_5a1667a1: >-
           arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0
-      RoleArn:
-        Fn::GetAtt:
-          - Role96c4ca3d
-          - Arn
-      StateMachineName: StateMachinef45946c0
+      RoleArn: !Ref IamRoleArn
+      StateMachineName: CFChocolateFactory
       StateMachineType: EXPRESS
       EncryptionConfiguration:
         Type: AWS_OWNED_KEY
@@ -356,65 +366,62 @@ Resources:
         IncludeExecutionData: true
         Destinations:
           - CloudWatchLogsLogGroup:
-              LogGroupArn:
-                Fn::GetAtt:
-                  - LogGroupf8fc4000
-                  - Arn
-  Role96c4ca3d:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: StepFunctions_IAM_ROLE_Wonka-new22e41c19
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: states.amazonaws.com
-            Action: sts:AssumeRole
-      MaxSessionDuration: 3600
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaDynamoDBExecutionRole
-        - arn:aws:iam::aws:policy/AWSLambdaInvocation-DynamoDB
-        - arn:aws:iam::aws:policy/AdministratorAccess
-        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
-  Policy7d7a037f:
-    Type: AWS::IAM::RolePolicy
-    Properties:
-      PolicyName: XRayAccessPolicy9b752307
-      RoleName:
-        Ref: Role96c4ca3d
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Action:
-              - xray:PutTraceSegments
-              - xray:PutTelemetryRecords
-              - xray:GetSamplingRules
-              - xray:GetSamplingTargets
-            Resource:
-              - '*'
-  Policy148f6963:
-    Type: AWS::IAM::RolePolicy
-    Properties:
-      PolicyName: CloudWatchLogsDeliveryFullAccessPolicy4ce4a68f
-      RoleName:
-        Ref: Role96c4ca3d
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Action:
-              - logs:CreateLogDelivery
-              - logs:GetLogDelivery
-              - logs:UpdateLogDelivery
-              - logs:DeleteLogDelivery
-              - logs:ListLogDeliveries
-              - logs:PutResourcePolicy
-              - logs:DescribeResourcePolicies
-              - logs:DescribeLogGroups
-            Resource: '*'
-  LogGroupf8fc4000:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: /aws/vendedlogs/states/StateMachinef45946c0-Logs
+              LogGroupArn: !Ref LogGroupArn
+#  Role96c4ca3d:
+#    Type: AWS::IAM::Role
+#    Properties:
+#      RoleName: StepFunctions_IAM_ROLE_Wonka-new22e41c19
+#      AssumeRolePolicyDocument:
+#        Version: '2012-10-17'
+#        Statement:
+#          - Effect: Allow
+#            Principal:
+#              Service: states.amazonaws.com
+#            Action: sts:AssumeRole
+#      MaxSessionDuration: 3600
+#      ManagedPolicyArns:
+#        - arn:aws:iam::aws:policy/service-role/AWSLambdaDynamoDBExecutionRole
+#        - arn:aws:iam::aws:policy/AWSLambdaInvocation-DynamoDB
+#        - arn:aws:iam::aws:policy/AdministratorAccess
+#        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
+#  Policy7d7a037f:
+#    Type: AWS::IAM::RolePolicy
+#    Properties:
+#      PolicyName: XRayAccessPolicy9b752307
+#      RoleName:
+#        Ref: Role96c4ca3d
+#      PolicyDocument:
+#        Version: '2012-10-17'
+#        Statement:
+#          - Effect: Allow
+#            Action:
+#              - xray:PutTraceSegments
+#              - xray:PutTelemetryRecords
+#              - xray:GetSamplingRules
+#              - xray:GetSamplingTargets
+#            Resource:
+#              - '*'
+#  Policy148f6963:
+#    Type: AWS::IAM::RolePolicy
+#    Properties:
+#      PolicyName: CloudWatchLogsDeliveryFullAccessPolicy4ce4a68f
+#      RoleName:
+#        Ref: Role96c4ca3d
+#      PolicyDocument:
+#        Version: '2012-10-17'
+#        Statement:
+#          - Effect: Allow
+#            Action:
+#              - logs:CreateLogDelivery
+#              - logs:GetLogDelivery
+#              - logs:UpdateLogDelivery
+#              - logs:DeleteLogDelivery
+#              - logs:ListLogDeliveries
+#              - logs:PutResourcePolicy
+#              - logs:DescribeResourcePolicies
+#              - logs:DescribeLogGroups
+#            Resource: '*'
+#  LogGroupf8fc4000:
+#    Type: AWS::Logs::LogGroup
+#    Properties:
+#      LogGroupName: /aws/vendedlogs/states/CFChocolateFactory-Logs
