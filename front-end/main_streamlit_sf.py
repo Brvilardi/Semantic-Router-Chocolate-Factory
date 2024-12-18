@@ -56,16 +56,21 @@ def get_chat_session():
         raise RuntimeError("Couldn't get your Streamlit Session object.")
     return session_info.session.id
 
+st.set_page_config(
+    page_title="Chocolate Factory",
+    page_icon="logo.jpeg"
+)
 
-st.title(f"GeniusAI - Willy Wonka 🏭🍫")
 
-st.logo("genius_ai.png")
+st.title(f"Semantic Router - Chocolate Factory 🏭🍫")
+
+# st.logo("logo.jpeg")
+
+st.image("logo.jpeg", width=300)
 
 st.markdown(
         "<div style='background-color: #8EB69B; padding: 10px; border-radius: 10px; text-align: center;'>"
-        "<img src='https://d335luupugsy2.cloudfront.net/cms/files/725547/1726145377/$gqwjb4k5ujw'"
-        "width='150px' style='margin-bottom: 10px;'>"
-        "<h2 style='color: white;'>Atendimento de Suporte - Willy Wonka</h2>"
+        "<h2 style='color: white;'>Atendimento de Suporte - Fábrica de chocolate</h2>"
         "<p style='color: white;'>Seu canal de suporte para Fantástica Fábrica de Chocolates. Fique a vontade para realizar pedidos e tirar dúvidas técnicas! 👋</p4>"
         "<h5 style='color: white;'>Powered by Amazon Bedrock and AWS Step Functions</h5>"
         "</div>",
@@ -110,7 +115,7 @@ if question := st.chat_input("Faça sua pergunta"):
             )
 
             # status.write(f"Custo: US${answer['response_pricing']['price']}")
-            status.write(f"Duração: {answer_time}")
+            status.write(f"Tempo de execução: {answer_time/1000} segundos")
             status.write(f"Rota: {response['route']}")
             status.write(f"Resumo: {response['summary']}")
             status.write(f"Session ID: {session_id}")
