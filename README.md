@@ -14,6 +14,7 @@ A ideia central é ilustrar como um roteador semântico pode direcionar mensagen
 Seja você um entusiasta de IA 💡, desenvolvedor 👨‍💻👩‍💻 ou arquiteto de soluções 🏗️, este repositório oferece uma base sólida para explorar o potencial de aplicações modernas em AI/ML e serverless.
 
 ## O que é um Roteador Semântico? 🤔🔍
+![semantic_router_step_function.png](imgs/semantic_router_step_function.png)
 Um roteador semântico é uma solução baseada em inteligência artificial que compreende o significado (ou semântica) de uma mensagem ou solicitação e a direciona ao fluxo mais adequado. Em vez de depender de palavras-chave ou regras rígidas, ele analisa o contexto e a intenção por trás de cada interação, tornando o processamento mais inteligente e eficiente.
 
 Por que um Roteador Semântico é importante? 🚀
