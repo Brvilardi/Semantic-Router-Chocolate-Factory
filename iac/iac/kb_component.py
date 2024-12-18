@@ -50,8 +50,8 @@ class KnowledgeBase(Construct):
 
         self.aurora_serverless_v2 = aws_rds.DatabaseCluster(self, "VectorDataBase",
                                                             engine=aws_rds.DatabaseClusterEngine.aurora_postgres(
-                                                                version=aws_rds.AuroraPostgresEngineVersion.VER_16_2),
-                                                            serverless_v2_min_capacity=0.5,
+                                                                version=aws_rds.AuroraPostgresEngineVersion.VER_16_3),
+                                                            serverless_v2_min_capacity=0,
                                                             serverless_v2_max_capacity=2,
                                                             writer=aws_rds.ClusterInstance.serverless_v2("writer"),
                                                             vpc=vpc,
@@ -61,6 +61,7 @@ class KnowledgeBase(Construct):
                                                             credentials=aws_rds.Credentials.from_generated_secret(
                                                                 'postgres')
                                                             )
+
 
         self.post_deploy_function = aws_lambda.Function(
             self,
