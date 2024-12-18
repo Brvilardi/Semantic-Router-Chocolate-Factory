@@ -46,6 +46,7 @@ Caso você nunca tenha configurado o CDK, será necessário executar o comando `
 3. Subir o streamlit (pasta /front-end)
 ```shell
 cd front-end
+pip install -r requirements.txt
 streamlit run main_streamlit_sf.py -- --lambda-function-arn XXXX
 ```
 
