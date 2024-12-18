@@ -27,6 +27,16 @@ Em sistemas baseados em IA generativa, como chatbots, um roteador semântico des
 * Precisão no atendimento 🎯: garante que as solicitações sejam tratadas de forma eficaz, conectando os usuários às respostas ou soluções mais relevantes.
 No contexto deste projeto, o roteador semântico ajuda o chatbot da fábrica de chocolates 🍫 a interpretar corretamente solicitações diversas — como rastrear pedidos, sugerir produtos ou solucionar problemas —, proporcionando uma experiência encantadora, eficiente e economicamente viável.
 
+
+## Como essa solução funciona?
+![high_level_architect.png](imgs/high_level_architect.png)
+
+Basicamente, as perguntas feitas ao chatbot são enviadas uma Lambda, que centraliza os prompts/variaveis importantes e redireciona para uma Step Functions, que utiliza o roteador semantico para decidir qual fluxo seguir.
+
+O fluxo sendo definido, os estados corretos são executados e a resposta é retornada ao usuário. Possivelmente, o usuário fará uma pergunta técnica sobre os produtos e, para essas, uma base de conhecimento é utilizada (RAG) para responder.
+
+Ao fim de todas as interações, é chamado uma outra Step Function de forma assíncrona para gerar um resumo do que foi conversado até o momento e armazenar a mensagem atual, resposta da IA e resumo em um DynamoDB
+
 ## Como fazer o deploy?
 Para configurar a demo, são necessários alguns passos:
 
@@ -53,4 +63,14 @@ streamlit run main_streamlit_sf.py -- --lambda-function-arn XXXX
 
 O ARN da função lambda pode ser obtido nos outputs do CDK -> "chocolate-factory-chatbot.LambdaAPI" 
    
+## F.A.Q
 
+### Como a solução automatizou o processo de criação da Base de conhecimento?
+
+Basicamente, foi utilizado Custom Resources do CloudFormation, definidos no IaC para executar as tarefas específicas. Podemos quebrar esse processo em 4 passos:
+![kb_prepare.png](imgs/kb_prepare.png)
+
+1. O Bucket S3 e Aurora Postgres Serverless v2 _(já com o scale to zero!!)_ são provisionados
+2. Os arquivos na pasta `/iac/upload_kb_files_lambda/file` são enviados para o bucket S3
+3. Uma Lambda configura o Aurora Postgres para ser compatível com o Bedrock Knowledge Base (mais detalhes [aqui](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/AuroraPostgreSQL.VectorDB.html))
+4. Criar a Knowledge Base e chamar a API para dar start no sync
