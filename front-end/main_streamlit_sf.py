@@ -17,7 +17,7 @@ if argv[1] != "--lambda-function-arn" or not match(
 
 LAMBDA_FUNCTION_ARN = argv[2]
 
-aws_lambda = boto3.client('lambda')
+aws_lambda = boto3.client('lambda', region_name='us-east-1')
 
 
 def invoke_lambda_function(question, session_id):
