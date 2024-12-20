@@ -25,6 +25,7 @@ Em sistemas baseados em IA generativa, como chatbots, um roteador semântico des
 * Menor latência ⚡: ao encaminhar as solicitações diretamente para os serviços ou fluxos mais adequados, elimina atrasos desnecessários, resultando em interações mais rápidas.
 * Custo otimizado 💰: evita o uso excessivo de modelos avançados ou fluxos complexos para solicitações simples, otimizando o consumo de recursos e reduzindo despesas operacionais.
 * Precisão no atendimento 🎯: garante que as solicitações sejam tratadas de forma eficaz, conectando os usuários às respostas ou soluções mais relevantes.
+
 No contexto deste projeto, o roteador semântico ajuda o chatbot da fábrica de chocolates 🍫 a interpretar corretamente solicitações diversas — como rastrear pedidos, sugerir produtos ou solucionar problemas —, proporcionando uma experiência encantadora, eficiente e economicamente viável.
 
 
@@ -73,4 +74,4 @@ Basicamente, foi utilizado Custom Resources do CloudFormation, definidos no IaC 
 1. O Bucket S3 e Aurora Postgres Serverless v2 _(já com o scale to zero!!)_ são provisionados
 2. Os arquivos na pasta `/iac/upload_kb_files_lambda/file` são enviados para o bucket S3
 3. Uma Lambda configura o Aurora Postgres para ser compatível com o Bedrock Knowledge Base (mais detalhes [aqui](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/AuroraPostgreSQL.VectorDB.html))
-4. Criar a Knowledge Base e chamar a API para dar start no sync
+4. A Knowledge Base é criada e a API é chamada para dar start no sync
