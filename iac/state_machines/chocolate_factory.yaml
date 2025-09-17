@@ -355,7 +355,7 @@ Resources:
         bedrockinvokeModel_ModelId_8c18da44: >-
           arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-haiku-20240307-v1:0
         bedrockinvokeModel_ModelId_5a1667a1: >-
-          arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0
+          arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-haiku-20240307-v1:0
       RoleArn: !Ref IamRoleArn
       StateMachineName: CFChocolateFactory
       StateMachineType: EXPRESS
