@@ -40,6 +40,7 @@ def invoke_lambda_function(question, session_id):
         raise Exception(lambda_response)
 
     payload = json.loads(lambda_response['Payload'].read())
+    print(f"Payload: {payload}")
     body = json.loads(payload['body'])
     print("output: ", payload)
     print(payload.get('statusCode'))
